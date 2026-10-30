@@ -2,13 +2,11 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/vendor/SymconModulHelper/VariableProfileHelper.php';
-
-class HDGModule extends IPSModule
+class HDGModule extends IPSModuleStrict
 {
-    use VariableProfileHelper;
+    private const PRESENTATION_VALUE = '{3319437D-7CDE-699D-750A-3C6A3841FA75}';
 
-    public function Create()
+    public function Create(): void
     {
         parent::Create();
         $this->ConnectParent('{C164EB47-32B6-C0DA-71E0-E5569EA8D842}');
@@ -29,7 +27,7 @@ class HDGModule extends IPSModule
         $this->RegisterPropertyString('Variables', json_encode($Variables));
     }
 
-    public function ApplyChanges()
+    public function ApplyChanges(): void
     {
         parent::ApplyChanges();
 
@@ -37,9 +35,10 @@ class HDGModule extends IPSModule
         $NewPos = 0;
         $Variables = json_decode($this->ReadPropertyString('Variables'), true);
         foreach ($Variables as $Variable) {
-            $VariableActive = $Variable['Keep'];
+            $VariableActive = (bool) $Variable['Keep'];
+            $Type = constant($Variable['VarType']);
 
-            @$this->MaintainVariable($Variable['Ident'], $Variable['Name'], constant($Variable['VarType']), $Variable['Profile'], $Variable['Pos'], $VariableActive);
+            $this->MaintainVariable($Variable['Ident'], $Variable['Name'], $Type, $this->getPresentation((string) $Variable['Profile'], $Type), (int) $Variable['Pos'], $VariableActive);
             if ($Variable['Action'] && $VariableActive) {
                 $this->EnableAction($Variable['Ident']);
             }
@@ -68,11 +67,10 @@ class HDGModule extends IPSModule
             }
             IPS_SetProperty($this->InstanceID, 'Variables', json_encode($Variables));
             IPS_ApplyChanges($this->InstanceID);
-            return;
         }
     }
 
-    public function resetVariables()
+    public function resetVariables(): void
     {
         $NewRows = static::$Variables;
         $Variables = [];
@@ -90,51 +88,60 @@ class HDGModule extends IPSModule
         }
         IPS_SetProperty($this->InstanceID, 'Variables', json_encode($Variables));
         IPS_ApplyChanges($this->InstanceID);
-        return;
     }
 
-    protected function SetValue($Ident, $Value)
+    protected function SetValue(string $Ident, mixed $Value): bool
     {
         if (@$this->GetIDForIdent($Ident)) {
             $this->SendDebug('SetValue :: ' . $Ident, $Value, 0);
-            parent::SetValue($Ident, $Value);
+            return parent::SetValue($Ident, $Value);
+        }
+        return false;
+    }
+
+    /**
+     * Lädt die Datenpunkte einer Gruppe aus datapoints.json in die Variablenliste der Instanz.
+     */
+    protected function loadDatapoints(string $Group, string $TypeName): void
+    {
+        static::$Variables = [];
+        $datapoints = json_decode(file_get_contents(__DIR__ . '/datapoints.json'), true);
+        foreach ($datapoints[$Group] as $entry) {
+            if ($entry['typeName'] == $TypeName) {
+                foreach ($entry['nodes'] as $node) {
+                    static::$Variables[] = [$node['ident'], $node['name'], $node['type'], $node['profile'], $node['dataid'], $node['action'], $node['keep']];
+                }
+            }
         }
     }
 
-    protected function refreshData()
+    /**
+     * Bildet das bisherige Profil des Datenpunkts auf eine native Darstellung (Wertanzeige) ab.
+     * Alle Datenpunkte sind schreibgeschützt.
+     */
+    private function getPresentation(string $Profile, int $Type): array
     {
-        $Variables = json_decode($this->ReadPropertyString('Variables'), true);
-        $post = 'nodes=';
-
-        $last_key = @end(array_keys($Variables));
-
-        foreach ($Variables as $key => $Variable) {
-            if ($key == $last_key) {
-                $post .= $Variable['Node'] . '';
-            } else {
-                $post .= $Variable['Node'] . '-';
-            }
+        $Presentation = ['PRESENTATION' => self::PRESENTATION_VALUE];
+        switch ($Profile) {
+            case '~Temperature':
+                return $Presentation + ['SUFFIX' => ' °C', 'DIGITS' => 1];
+            case '~Electricity':
+                return $Presentation + ['SUFFIX' => ' kWh', 'DIGITS' => 2];
+            case '~Intensity.100':
+                return $Presentation + ['SUFFIX' => ' %', 'DIGITS' => 0];
+            case 'HDG.KG':
+                return $Presentation + ['SUFFIX' => ' kg'];
+            case 'HDG.Tonne':
+                return $Presentation + ['SUFFIX' => ' t', 'DIGITS' => 2];
+            case '~Switch':
+                return $Presentation + ['OPTIONS' => json_encode([
+                    ['Value' => false, 'Caption' => $this->Translate('Off'), 'IconActive' => false, 'IconValue' => '', 'ColorActive' => true, 'ColorValue' => 16077123, 'ContentColorActive' => false],
+                    ['Value' => true, 'Caption' => $this->Translate('On'), 'IconActive' => false, 'IconValue' => '', 'ColorActive' => true, 'ColorValue' => 1692672, 'ContentColorActive' => false]
+                ])];
         }
-
-        $this->SendDebug('sendRequest :: Post Nodes', $post, 0);
-        $URL = $this->ReadPropertyString('URL');
-        $headers[] = 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8';
-
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $URL . '/ApiManager.php?action=dataRefresh');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        $Response = curl_exec($ch);
-        $HttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $this->SendDebug('sendRequest :: URl', $URL . '/ApiManager.php?action=dataRefresh', 0);
-        $this->SendDebug('sendRequest :: Response', $Response, 0);
-        $this->SendDebug('sendRequest :: HttpCode', $HttpCode, 0);
-        if ($HttpCode != 200) {
-            $this->LogMessage('Error: ' . $HttpCode, KL_ERROR);
-            return [];
+        if ($Type == VARIABLETYPE_FLOAT) {
+            return $Presentation + ['DIGITS' => 2];
         }
-        return json_decode($Response, true);
+        return $Presentation;
     }
 }

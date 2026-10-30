@@ -1,6 +1,6 @@
 [![Version](https://img.shields.io/badge/Symcon-PHPModul-red.svg)](https://www.symcon.de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/)
 [![Check Style](https://github.com/Schnittcher/HDGBavaria/workflows/Check%20Style/badge.svg)](https://github.com/Schnittcher/HDGBavaria/actions)
-![Version](https://img.shields.io/badge/Symcon%20Version-6.0%20%3E-blue.svg)
+![Version](https://img.shields.io/badge/Symcon%20Version-9.0%20%3E-blue.svg)
 [![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-green.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 # HDGBavaria
@@ -18,7 +18,7 @@
    
 ## 1. Voraussetzungen
 
-* mindestens IPS Version 6.0
+* mindestens IPS Version 9.0
 
 ## 2. Enthaltene Module
 
