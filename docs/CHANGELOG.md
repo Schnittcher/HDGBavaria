@@ -9,3 +9,8 @@
 
 ### Fixes
 - Fehlerausgabe bei fehlgeschlagener Anfrage korrigiert.
+
+## 08.12.2022 - Version 1.0
+
+### Neu
+- Erste Version.
